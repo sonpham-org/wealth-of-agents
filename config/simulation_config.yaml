@@ -1,0 +1,39 @@
+# Simulation Configuration Templates
+
+## Basic Simulation
+num_agents: 100
+commodities:
+  - grain
+  - iron
+  - wood
+  - stone
+num_ticks: 1000
+
+## LLM Configuration
+enable_llm: false
+llm_batch_size: 32
+use_vllm: false
+
+## Fiscal Policy
+enable_money_printing: true
+enable_taxes: false
+inflation_rate: 0.05
+intervention_frequency: 20
+intervention_size: 500.0
+
+## Visualization
+enable_websocket: false
+websocket_port: 8765
+
+## Agent Configuration
+agent_config:
+  initial_wallet_range: [80, 150]
+  production_efficiency_range: [0.8, 1.5]
+  utility_alpha_range: [5, 20]
+  consumption_rate_range: [0.1, 0.3]
+
+## Performance
+ray_config:
+  num_cpus: null  # auto-detect
+  num_gpus: 0
+  object_store_memory: 2000000000  # 2GB

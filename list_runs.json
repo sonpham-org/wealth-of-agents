@@ -1,0 +1,65 @@
+[
+  {
+    "path": "output/20260106_181648",
+    "run_id": "20260106_181648",
+    "date": "2026-01-06 18:16:48",
+    "agents": 80,
+    "ticks": 100,
+    "trades": 4951,
+    "money_printing": true
+  },
+  {
+    "path": "output/20260106_180451",
+    "run_id": "20260106_180451",
+    "date": "2026-01-06 18:04:51",
+    "agents": 80,
+    "ticks": 100,
+    "trades": 4255,
+    "money_printing": true
+  },
+  {
+    "path": "output/20260106_174910",
+    "run_id": "20260106_174910",
+    "date": "2026-01-06 17:49:10",
+    "agents": 80,
+    "ticks": 83,
+    "trades": 5121,
+    "money_printing": true
+  },
+  {
+    "path": "output/20260106_173626",
+    "run_id": "20260106_173626",
+    "date": "2026-01-06 17:36:26",
+    "agents": 80,
+    "ticks": 200,
+    "trades": 357,
+    "money_printing": true
+  },
+  {
+    "path": "output/20260106_173329",
+    "run_id": "20260106_173329",
+    "date": "2026-01-06 17:33:29",
+    "agents": 150,
+    "ticks": 0,
+    "trades": 0,
+    "money_printing": true
+  },
+  {
+    "path": "output/20260106_161613",
+    "run_id": "20260106_161613",
+    "date": "2026-01-06 16:16:13",
+    "agents": 100,
+    "ticks": 20,
+    "trades": 68,
+    "money_printing": true
+  },
+  {
+    "path": "output/20260106_161405",
+    "run_id": "20260106_161405",
+    "date": "2026-01-06 16:14:05",
+    "agents": 100,
+    "ticks": 1,
+    "trades": 61,
+    "money_printing": true
+  }
+]
