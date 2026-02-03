@@ -16,7 +16,7 @@ import subprocess
 import json
 
 # Database imports (using SQLAlchemy)
-from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, DateTime, Text, JSON
+from sqlalchemy import create_engine, Column, String, Integer, Float, Boolean, DateTime, Text, JSON, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
@@ -256,7 +256,7 @@ def health_check(db: Session = Depends(get_db)):
     """Health check endpoint for Railway"""
     try:
         # Check database connection
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         
         # Check storage
         storage = get_storage_manager()
