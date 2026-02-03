@@ -30,7 +30,10 @@ class StorageManager:
         """
         self.storage_type = storage_type
         self.bucket_name = bucket_name
-        self.local_base_path = Path("output")
+        # Use /app/data/output for persistent storage on Railway (volume mount)
+        data_dir = os.getenv("DATA_DIR", "/app/data" if os.path.exists("/app/data") else ".")
+        self.local_base_path = Path(data_dir) / "output"
+        self.local_base_path.mkdir(parents=True, exist_ok=True)
         
         if storage_type == "s3":
             if not S3_AVAILABLE:

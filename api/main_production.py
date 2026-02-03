@@ -27,7 +27,9 @@ from api.storage import get_storage_manager
 # Database Setup
 # ============================================================================
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./jobs.db")
+# Use /app/data for persistent storage on Railway (volume mount)
+DATA_DIR = os.getenv("DATA_DIR", "/app/data" if os.path.exists("/app/data") else ".")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATA_DIR}/jobs.db")
 
 # Railway PostgreSQL fix: postgres:// → postgresql://
 if DATABASE_URL.startswith("postgres://"):
