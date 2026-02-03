@@ -20,5 +20,5 @@ COPY . .
 # Expose port
 EXPOSE 8000
 
-# Start command
-CMD ["uvicorn", "api.main_production:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start command - use shell form to expand $PORT
+CMD uvicorn api.main_production:app --host 0.0.0.0 --port ${PORT:-8000}
