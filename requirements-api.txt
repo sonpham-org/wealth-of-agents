@@ -1,0 +1,18 @@
+# API server dependencies (lighter build for Railway)
+
+# API server
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# Database
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.0
+alembic>=1.13.0
+
+# Utilities
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+
+# For running simulations in subprocess
+numpy>=1.24.0
+pandas>=2.0.0
