@@ -6,298 +6,167 @@
 Railway Project: wealth-of-agents
 ├── API Service (api.main_production:app)
 │   ├── PostgreSQL Database (Railway addon)
-│   └── Environment variables
-├── Web Service (Next.js frontend)
-│   └── Environment variables
-└── S3 Bucket (external AWS)
+│   └── Volume (/app/output) for simulation files
+└── Web Service (Next.js frontend)
+    └── Environment variables
 ```
+
+**No external services required** — everything runs on Railway.
 
 ## Step-by-Step Deployment
 
-### 1. Prepare Repository
-
-```bash
-cd /home/son/Desktop/GitHub/wealth-of-agents
-
-# Ensure all files are committed
-git add .
-git commit -m "Add production backend with PostgreSQL"
-git push origin main
-```
-
-### 2. Create Railway Project
+### 1. Create Railway Project
 
 1. Go to https://railway.app
 2. Click "New Project"
 3. Select "Deploy from GitHub repo"
 4. Choose `wealth-of-agents` repository
 
-### 3. Set Up API Service
+### 2. Set Up API Service
 
 #### A. Add PostgreSQL Database
 1. In Railway project, click "New"
 2. Select "Database" → "PostgreSQL"
-3. Railway will automatically create `DATABASE_URL` variable
+3. Railway will automatically create `DATABASE_URL` variable and link it to your service
 
 #### B. Configure API Service
-1. Click "New" → "GitHub Repo"
-2. Select `wealth-of-agents`
-3. Root Directory: `/` (leave empty for repo root)
-4. Add environment variables:
+1. Click on your deployed service
+2. Go to **Settings** tab
+3. Set **Root Directory**: leave empty (repo root)
+4. Set **Start Command**: `uvicorn api.main_production:app --host 0.0.0.0 --port $PORT`
+
+#### C. Add Persistent Volume
+1. Go to **Settings** → **Volumes**
+2. Click "Add Volume"
+3. **Mount Path**: `/app/output`
+4. This ensures simulation output files persist across deploys
+
+#### D. Set Environment Variables
+Go to **Variables** tab and add:
 
 ```bash
-# Required
-PORT=8000
-STORAGE_TYPE=s3
-S3_BUCKET_NAME=wealth-of-agents-simulations
-AWS_ACCESS_KEY_ID=<your-aws-key>
-AWS_SECRET_ACCESS_KEY=<your-aws-secret>
-AWS_REGION=us-east-1
+# Storage (Railway-only, no AWS needed)
+STORAGE_TYPE=local
 
-# Optional
-CORS_ORIGINS=https://agents.sonpham.net,https://sonpham.net
+# Optional: restrict CORS to your domains
+CORS_ORIGINS=https://your-frontend.railway.app
 
-# Database - automatically set by Railway when you add PostgreSQL
-# DATABASE_URL=postgresql://user:pass@host:5432/railway
+# These are auto-set by Railway:
+# DATABASE_URL (from PostgreSQL addon)
+# PORT (Railway sets this)
 ```
 
-#### C. Configure Build
-Railway auto-detects Python. If needed, customize:
-
-**Build Command** (optional):
-```bash
-pip install -r requirements.txt
-```
-
-**Start Command**:
-```bash
-uvicorn api.main_production:app --host 0.0.0.0 --port $PORT
-```
-
-### 4. Set Up Web Service
+### 3. Set Up Web Service
 
 1. In same Railway project, click "New" → "GitHub Repo"
 2. Select `wealth-of-agents` again
-3. Root Directory: `web`
+3. Configure:
+   - **Root Directory**: `web`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
+
 4. Add environment variables:
 
 ```bash
 NEXT_PUBLIC_API_URL=https://<your-api-service>.railway.app
-
-# Or with custom domain:
-NEXT_PUBLIC_API_URL=https://agents-api.sonpham.net
 ```
 
-**Build Command**:
-```bash
-npm install && npm run build
-```
+> Tip: Get your API service URL from its Settings → Networking → Public Networking
 
-**Start Command**:
-```bash
-npm start
-```
+### 4. Configure Networking (Optional)
 
-### 5. Configure Custom Domains
+#### Generate Public URLs
+For each service:
+1. Click on service → Settings → Networking
+2. Click "Generate Domain" to get a `.railway.app` URL
 
-#### API Service:
-1. Click on API service
-2. Settings → Networking → Custom Domain
-3. Add: `agents-api.sonpham.net`
-4. Copy the CNAME target
+#### Custom Domains (Optional)
+1. Settings → Networking → Custom Domain
+2. Add your domain (e.g., `agents-api.yourdomain.com`)
+3. Configure DNS with the provided CNAME target
 
-#### Web Service:
-1. Click on Web service
-2. Settings → Networking → Custom Domain
-3. Add: `agents.sonpham.net`
-4. Copy the CNAME target
-
-#### DNS Configuration (HostGator):
-```
-Type: CNAME
-Host: agents-api
-Points to: <railway-cname-for-api>
-TTL: 300
-
-Type: CNAME
-Host: agents
-Points to: <railway-cname-for-web>
-TTL: 300
-```
-
-### 6. Set Up AWS S3
-
-```bash
-# Create bucket
-aws s3 mb s3://wealth-of-agents-simulations --region us-east-1
-
-# Set CORS policy
-aws s3api put-bucket-cors \
-  --bucket wealth-of-agents-simulations \
-  --cors-configuration file://s3-cors.json
-```
-
-**s3-cors.json**:
-```json
-{
-  "CORSRules": [{
-    "AllowedOrigins": ["https://agents.sonpham.net", "https://agents-api.sonpham.net"],
-    "AllowedMethods": ["GET", "PUT", "POST"],
-    "AllowedHeaders": ["*"],
-    "MaxAgeSeconds": 3000
-  }]
-}
-```
-
-### 7. Database Migrations (if needed)
-
-Railway automatically runs migrations if you use Alembic:
-
-```bash
-# Local setup (optional)
-cd /home/son/Desktop/GitHub/wealth-of-agents
-alembic init alembic
-
-# Create migration
-alembic revision --autogenerate -m "Initial tables"
-
-# Railway will run this on deploy:
-alembic upgrade head
-```
-
-Or tables are auto-created by SQLAlchemy on first run (current setup).
-
-### 8. Test Deployment
+### 5. Test Deployment
 
 ```bash
 # Health check
-curl https://agents-api.sonpham.net/health
+curl https://<your-api>.railway.app/health
 
 # Create test job
-curl -X POST https://agents-api.sonpham.net/jobs \
+curl -X POST https://<your-api>.railway.app/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "num_agents": 5,
     "num_steps": 50,
-    "description": "Production test"
+    "description": "Test simulation"
   }'
 
 # Check job status
-curl https://agents-api.sonpham.net/jobs/<job-id>
+curl https://<your-api>.railway.app/jobs/<job-id>
 ```
-
-### 9. Monitor
-
-Railway provides:
-- **Logs**: View in real-time from dashboard
-- **Metrics**: CPU, memory, network usage
-- **Deployments**: Automatic on git push
 
 ## Environment Variables Reference
 
-### API Service (Required):
-```bash
-DATABASE_URL          # Auto-set by Railway PostgreSQL addon
-PORT                  # Auto-set by Railway (typically 8000)
-STORAGE_TYPE          # 's3' for production
-S3_BUCKET_NAME        # Your S3 bucket name
-AWS_ACCESS_KEY_ID     # AWS credentials
-AWS_SECRET_ACCESS_KEY # AWS credentials
-AWS_REGION            # e.g., 'us-east-1'
-```
+### API Service
 
-### API Service (Optional):
-```bash
-CORS_ORIGINS          # Comma-separated allowed origins
-ANTHROPIC_API_KEY     # For cognitive agents (LLM)
-OPENAI_API_KEY        # Alternative LLM provider
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Auto | Set by Railway PostgreSQL addon |
+| `PORT` | Auto | Set by Railway |
+| `STORAGE_TYPE` | No | `local` (default) - uses Railway Volume |
+| `CORS_ORIGINS` | No | Comma-separated allowed origins |
+| `ANTHROPIC_API_KEY` | No | For LLM-powered agents |
 
-### Web Service (Required):
-```bash
-NEXT_PUBLIC_API_URL   # URL of your API service
-```
+### Web Service
 
-## Key Differences from Old Backend
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `NEXT_PUBLIC_API_URL` | Yes | URL of your API service |
 
-| Feature | Old (In-Memory) | New (Production) |
-|---------|----------------|------------------|
-| Job Storage | ❌ RAM (lost on restart) | ✅ PostgreSQL (persistent) |
-| File Storage | ❌ Local (ephemeral) | ✅ S3 (permanent) |
-| Crash Recovery | ❌ No | ✅ Yes |
-| Multiple Instances | ❌ No sync | ✅ Shared database |
-| Health Checks | ❌ None | ✅ /health endpoint |
-| Scalability | ❌ Single instance | ✅ Multiple workers possible |
-| Database Migrations | ❌ N/A | ✅ Alembic support |
+## How It Works
 
-## Advantages for Railway
+1. **Jobs** are stored in PostgreSQL (persists across restarts)
+2. **Simulation files** are stored in the Railway Volume at `/app/output`
+3. **No external services** — everything is self-contained on Railway
 
-1. **Persistent Jobs**: Survives restarts and redeployments
-2. **Health Checks**: Railway monitors `/health` endpoint
-3. **PostgreSQL Integration**: Railway's managed database
-4. **Auto-scaling Ready**: Can run multiple API instances
-5. **Proper Timeouts**: 30-minute timeout for simulations
-6. **Error Tracking**: All errors saved to database
-7. **Cloud Storage**: Required (no ephemeral filesystem reliance)
+## Cost Estimate
 
-## Cost Estimates
+| Component | Cost |
+|-----------|------|
+| Railway Hobby Plan | $5/month |
+| PostgreSQL | Included |
+| Volume Storage | Included (up to 5GB) |
+| **Total** | **~$5/month** |
 
-### Railway:
-- **Hobby Plan**: $5/month (500 hours)
-- **Pro Plan**: $20/month (unlimited hours)
-- **PostgreSQL**: Included in plan
-- **Bandwidth**: 100GB included
+## Monitoring
 
-### AWS S3:
-- **Storage**: $0.023/GB/month
-- **Requests**: Minimal (<$1/month for typical usage)
-- **Estimated**: ~$2-5/month
-
-**Total**: ~$25-30/month for production-grade deployment
+Railway provides:
+- **Logs**: Real-time in dashboard
+- **Metrics**: CPU, memory, network
+- **Deployments**: Automatic on git push
 
 ## Troubleshooting
 
-### "relation does not exist" error:
-Tables auto-create on first run. If issues:
-```bash
-railway run alembic upgrade head
-```
+### "relation does not exist" error
+Tables auto-create on first run. If issues persist, redeploy the service.
 
-### Database connection errors:
-Check `DATABASE_URL` is set by Railway PostgreSQL addon.
+### Database connection errors
+Ensure PostgreSQL addon is linked to your service (check Variables tab for `DATABASE_URL`).
 
-### Simulation timeouts:
-Increase timeout in `main_production.py` line 201:
-```python
-timeout=3600  # 60 minutes
-```
+### Simulation files disappear after redeploy
+Make sure you've attached a Volume to `/app/output`.
 
-### S3 upload failures:
-Verify AWS credentials and bucket permissions.
+### Health check failing
+Check logs for startup errors. Common issues:
+- Missing `DATABASE_URL`
+- Import errors (missing dependencies)
 
 ## Rollback Plan
 
-If production backend has issues, quickly revert:
+If production backend has issues:
 
-1. Change Railway start command to old backend:
-```bash
-uvicorn api.main:app --host 0.0.0.0 --port $PORT
-```
+1. Change start command to use simple backend:
+   ```bash
+   uvicorn api.main:app --host 0.0.0.0 --port $PORT
+   ```
 
-2. Keep in-memory mode (no database required)
-
-3. Accept that jobs won't persist across restarts
-
-## Next Steps
-
-1. ✅ Deploy to Railway with PostgreSQL
-2. ✅ Configure S3 bucket and credentials
-3. ✅ Set up custom domains
-4. ✅ Test end-to-end workflow
-5. 🔄 Monitor logs and performance
-6. 🔄 Set up alerts (optional: Sentry, LogDNA)
-7. 🔄 Configure automatic backups (Railway PostgreSQL)
-
----
-
-**Status**: Ready for production deployment to Railway with persistent storage
+2. This uses in-memory storage (jobs won't persist, but it works without database)
