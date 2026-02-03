@@ -6,7 +6,7 @@ Provides CLI interface for different simulation modes.
 import argparse
 import asyncio
 from core.simulation import MPESSimulation, SimulationConfig
-from core.leviathan import MonetaryPolicy
+# from core.leviathan import MonetaryPolicy  # Optional module, not needed for basic runs
 
 
 def parse_args():

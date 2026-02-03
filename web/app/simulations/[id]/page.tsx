@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+const SimulationVisualizer = dynamic(() => import('@/components/SimulationVisualizer'), {
+  ssr: false,
+  loading: () => <div className="text-center py-12">Loading visualizer...</div>
+});
 
 interface Job {
   id: string;
@@ -11,6 +17,8 @@ interface Job {
   started_at?: string;
   completed_at?: string;
   error?: string;
+  run_id?: string;
+  output_path?: string;
 }
 
 export default function SimulationDetail() {
@@ -19,8 +27,10 @@ export default function SimulationDetail() {
   const jobId = params.id as string;
   
   const [job, setJob] = useState<Job | null>(null);
-  const [results, setResults] = useState<any>(null);
+  const [simulationData, setSimulationData] = useState<any>(null);
+  const [currentTick, setCurrentTick] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'visualizer' | 'legacy'>('visualizer');
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -50,10 +60,23 @@ export default function SimulationDetail() {
 
   const fetchResults = async () => {
     try {
+      // Fetch simulation data for visualizer
       const response = await fetch(`${API_URL}/jobs/${jobId}/results`);
       if (response.ok) {
         const data = await response.json();
-        setResults(data);
+        
+        // Try to load simulation JSON data
+        if (data.run_id) {
+          try {
+            const simResponse = await fetch(`${API_URL}/output/${data.run_id}/simulation_data.json`);
+            if (simResponse.ok) {
+              const simData = await simResponse.json();
+              setSimulationData(simData);
+            }
+          } catch (err) {
+            console.error('Error loading simulation data:', err);
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching results:', error);
@@ -170,13 +193,57 @@ export default function SimulationDetail() {
         </div>
       </div>
 
-      {/* Results */}
-      {results && (
-        <div className="bg-white p-6 rounded-lg shadow">
-          <h2 className="text-2xl font-bold mb-4">Results</h2>
-          <div className="bg-gray-50 p-4 rounded overflow-auto max-h-96">
-            <pre className="text-sm">{results.stdout}</pre>
+      {/* Results Visualization */}
+      {job.status === 'completed' && (
+        <div className="mb-6">
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setViewMode('visualizer')}
+              className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+                viewMode === 'visualizer' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              Interactive Visualizer
+            </button>
+            <button
+              onClick={() => setViewMode('legacy')}
+              className={`px-6 py-3 rounded-lg font-semibold transition-colors ${
+                viewMode === 'legacy' 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-white text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              Legacy Visualizer
+            </button>
           </div>
+
+          {viewMode === 'visualizer' && simulationData ? (
+            <SimulationVisualizer 
+              data={simulationData}
+              onTickChange={setCurrentTick}
+            />
+          ) : viewMode === 'visualizer' ? (
+            <div className="bg-white p-12 rounded-lg shadow text-center text-gray-600">
+              <p className="text-xl">Loading simulation data...</p>
+              <p className="mt-2 text-sm">If this persists, try the Legacy Visualizer</p>
+            </div>
+          ) : (
+            <div className="bg-white p-6 rounded-lg shadow">
+              <h2 className="text-2xl font-bold mb-4">Legacy Visualizer</h2>
+              <div className="border rounded-lg overflow-hidden" style={{ height: '800px' }}>
+                <iframe 
+                  src={`${API_URL}/output/${job.run_id}/visualizer.html`}
+                  className="w-full h-full"
+                  title="Simulation Visualizer"
+                />
+              </div>
+              <p className="mt-4 text-sm text-gray-600">
+                This is the original visualizer with full functionality preserved.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

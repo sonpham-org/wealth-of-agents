@@ -1,5 +1,6 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, List, Any
 import uuid
@@ -8,6 +9,8 @@ from datetime import datetime
 from pathlib import Path
 import asyncio
 import subprocess
+import shutil
+from storage import get_storage_manager
 
 app = FastAPI(title="Wealth of Agents API", version="1.0.0")
 
@@ -23,9 +26,15 @@ app.add_middleware(
 # Store jobs in memory (in production, use database)
 jobs_db: Dict[str, Dict[str, Any]] = {}
 
-# Results directory
-RESULTS_DIR = Path("results")
-RESULTS_DIR.mkdir(exist_ok=True)
+# Use existing output directory structure
+OUTPUT_DIR = Path("output")
+OUTPUT_DIR.mkdir(exist_ok=True)
+
+# Serve static visualizer files
+VISUALIZER_PATH = Path("visualizer.html")
+if VISUALIZER_PATH.exists():
+    # Mount output directory as static files
+    app.mount("/output", StaticFiles(directory="output"), name="output")
 
 
 class SimulationConfig(BaseModel):
@@ -52,25 +61,28 @@ class Job(BaseModel):
 
 
 def run_simulation_sync(job_id: str, config: SimulationConfig):
-    """Run simulation synchronously"""
+    """Run simulation synchronously using existing run_simulation.py"""
     try:
         # Update job status
         jobs_db[job_id]["status"] = "running"
         jobs_db[job_id]["started_at"] = datetime.now().isoformat()
         
-        # Build command
+        # Generate timestamp-based run_id for output directory
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = OUTPUT_DIR / run_id
+        
+        # Build command using existing run_simulation.py
         cmd = [
             "python", "run_simulation.py",
-            "--num_agents", str(config.num_agents),
-            "--num_steps", str(config.num_steps),
-            "--initial_money", str(config.initial_money),
+            "--agents", str(config.num_agents),
+            "--ticks", str(config.num_steps),
         ]
         
         if config.use_money_issuer:
-            cmd.append("--use_money_issuer")
+            cmd.append("--money-printing")
         
         if config.use_cognitive_agents:
-            cmd.append("--use_cognitive_agents")
+            cmd.append("--use-llm")
         
         # Run simulation
         result = subprocess.run(
@@ -82,21 +94,20 @@ def run_simulation_sync(job_id: str, config: SimulationConfig):
         )
         
         if result.returncode == 0:
-            # Save results
-            result_path = RESULTS_DIR / f"{job_id}.json"
-            result_data = {
-                "job_id": job_id,
-                "config": config.dict(),
-                "stdout": result.stdout,
-                "completed_at": datetime.now().isoformat()
-            }
-            
-            with open(result_path, "w") as f:
-                json.dump(result_data, f, indent=2)
-            
+            # Simulation creates output/TIMESTAMP/ directory automatically
+            # Store reference to it
             jobs_db[job_id]["status"] = "completed"
             jobs_db[job_id]["completed_at"] = datetime.now().isoformat()
-            jobs_db[job_id]["result_path"] = str(result_path)
+            jobs_db[job_id]["run_id"] = run_id
+            jobs_db[job_id]["output_path"] = str(output_path)
+            
+            # Upload to cloud storage
+            storage = get_storage_manager()
+            storage_result = storage.save_simulation_output(run_id, output_path)
+            jobs_db[job_id]["storage"] = storage_result
+            
+            # Update list_runs.json
+            update_runs_list()
         else:
             jobs_db[job_id]["status"] = "failed"
             jobs_db[job_id]["error"] = result.stderr
@@ -106,6 +117,15 @@ def run_simulation_sync(job_id: str, config: SimulationConfig):
         jobs_db[job_id]["status"] = "failed"
         jobs_db[job_id]["error"] = str(e)
         jobs_db[job_id]["completed_at"] = datetime.now().isoformat()
+
+
+def update_runs_list():
+    """Update list_runs.json with all completed simulations"""
+    try:
+        from generate_run_list import generate_run_list
+        generate_run_list()
+    except Exception as e:
+        print(f"Failed to update runs list: {e}")
 
 
 async def run_simulation_async(job_id: str, config: SimulationConfig):
@@ -164,7 +184,7 @@ def get_job(job_id: str):
 
 @app.get("/jobs/{job_id}/results")
 def get_job_results(job_id: str):
-    """Get job results"""
+    """Get job results from output directory"""
     if job_id not in jobs_db:
         raise HTTPException(status_code=404, detail="Job not found")
     
@@ -173,11 +193,35 @@ def get_job_results(job_id: str):
     if job["status"] != "completed":
         raise HTTPException(status_code=400, detail=f"Job is {job['status']}, not completed")
     
-    result_path = Path(job["result_path"])
-    if not result_path.exists():
-        raise HTTPException(status_code=404, detail="Results file not found")
+    # Return path to visualizer
+    run_id = job.get("run_id")
+    if not run_id:
+        raise HTTPException(status_code=404, detail="Run ID not found")
     
-    with open(result_path) as f:
+    output_path = OUTPUT_DIR / run_id
+    if not output_path.exists():
+        raise HTTPException(status_code=404, detail="Output directory not found")
+    
+    # Return metadata and path to visualization
+    return {
+        "job_id": job_id,
+        "run_id": run_id,
+        "output_path": str(output_path),
+        "visualizer_url": f"/visualizer?run={run_id}",
+        "config": job["config"],
+        "created_at": job["created_at"],
+        "completed_at": job["completed_at"]
+    }
+
+
+@app.get("/runs")
+def list_runs():
+    """List all simulation runs from list_runs.json"""
+    list_runs_path = Path("list_runs.json")
+    if not list_runs_path.exists():
+        return []
+    
+    with open(list_runs_path) as f:
         return json.load(f)
 
 
